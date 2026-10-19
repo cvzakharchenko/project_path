@@ -1,6 +1,7 @@
 import org.jetbrains.changelog.Changelog
 import org.jetbrains.changelog.markdownToHTML
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
+import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask
 
 plugins {
     id("java") // Java support
@@ -96,6 +97,8 @@ intellijPlatform {
         ides {
             current()
         }
+        // Fail on every problem category except the known ScopeTokenTypes usage, see README
+        failureLevel = VerifyPluginTask.FailureLevel.ALL.toList() - VerifyPluginTask.FailureLevel.INTERNAL_API_USAGES
     }
 }
 
@@ -111,10 +114,14 @@ tasks {
 
     test {
         useJUnitPlatform()
+        // CLion's Nova engine refuses to start its backend freeze monitor in tests and logs an error, which fails every test
+        systemProperty("patch.engine.backend.freeze.timeout", "0")
     }
 
-    prepareTestSandbox {
-        // CLion's Nova engine logs an error on startup in tests, which fails every test, and these tests don't need it
-        disabledPlugins.add("org.jetbrains.plugins.clion.radler")
+    jar {
+        // Apache License 2.0 attribution for the ported IntelliJ Platform code
+        from(listOf("LICENSE", "NOTICE")) {
+            into("META-INF")
+        }
     }
 }

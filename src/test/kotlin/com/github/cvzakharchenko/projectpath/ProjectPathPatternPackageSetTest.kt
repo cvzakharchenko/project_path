@@ -1,30 +1,43 @@
+// Copyright 2000-2026 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 // Ported from com.intellij.psi.search.scope.packageSet.ProjectPathPatternPackageSetTest of IntelliJ Platform 2026.3
-// (JetBrains/intellij-community commit 8d10dbb2f609). Licensed under the Apache License 2.0.
+// (JetBrains/intellij-community commit 8d10dbb2f609). See NOTICE.
 package com.github.cvzakharchenko.projectpath
 
 import com.intellij.openapi.application.readAction
+import com.intellij.openapi.project.BaseProjectDirectories
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.psi.search.GlobalSearchScopesCore
 import com.intellij.psi.search.scope.packageSet.FilePatternPackageSet
+import com.intellij.psi.search.scope.packageSet.NamedScope
+import com.intellij.psi.search.scope.packageSet.NamedScopeManager
 import com.intellij.psi.search.scope.packageSet.PackageSetBase
 import com.intellij.psi.search.scope.packageSet.PackageSetFactory
 import com.intellij.psi.search.scope.packageSet.PackageSetParserExtension
 import com.intellij.psi.search.scope.packageSet.ParsingException
+import com.intellij.psi.search.scope.packageSet.lexer.ScopesLexer
 import com.intellij.testFramework.ExtensionTestUtil
+import com.intellij.testFramework.LightVirtualFile
 import com.intellij.testFramework.PsiTestUtil
 import com.intellij.testFramework.common.timeoutRunBlocking
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.rules.ProjectModelExtension
 import com.intellij.testFramework.rules.TempDirectoryExtension
 import com.intellij.workspaceModel.ide.registerProjectRoot
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertInstanceOf
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNotSame
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.extension.RegisterExtension
+import kotlin.time.Duration.Companion.seconds
 import com.intellij.psi.search.scope.packageSet.ProjectPathPackageSetParserExtension as FakeNativeParser
 
 @TestApplication
@@ -139,6 +152,146 @@ internal class ProjectPathPatternPackageSetTest {
         }
         assertInstanceOf(ProjectPathPatternPackageSet::class.java, compile("projectPath:libs//*"))
     }
+
+    @Test
+    fun `exactly one backport parser is registered`() {
+        assertEquals(1, PackageSetParserExtension.EP_NAME.extensionList.count { it is ProjectPathPackageSetParserExtension })
+    }
+
+    @Test
+    fun `unrecognized prefixes do not consume the lexer`() {
+        val parser = ProjectPathPackageSetParserExtension()
+        for (text in listOf("file:libs//*", "projectPathOther:libs//*", "projectPath[module]:libs//*", "projectPath", "projectPath :libs//*")) {
+            val lexer = ScopesLexer()
+            lexer.start(text)
+            val start = lexer.tokenStart
+            val end = lexer.tokenEnd
+            assertNull(parser.parseScope(lexer), text)
+            assertEquals(start, lexer.tokenStart, text)
+            assertEquals(end, lexer.tokenEnd, text)
+        }
+    }
+
+    @Test
+    fun `malformed patterns are rejected`() {
+        for (text in listOf("projectPath:", "projectPath", "projectPath :libs//*", "projectPath:libs//*||", "projectPath:libs/[", "projectPath:libs//*)")) {
+            val error = assertThrows(ParsingException::class.java, { PackageSetFactory.getInstance().compile(text) }, text)
+            assertFalse(error.message.isNullOrEmpty(), text)
+        }
+    }
+
+    // The pattern grammar is the platform's file: grammar, so both prefixes must accept and reject the same input
+    @Test
+    fun `pattern grammar matches the file grammar`() {
+        for (pattern in listOf("libs//*", "/libs//*", "a-b/c~d/#e/1.2//*", "libs/*.cpp", "libs/**/src//*", "a b//*", "*test.cpp")) {
+            val fileSet = assertInstanceOf(FilePatternPackageSet::class.java, PackageSetFactory.getInstance().compile("file:$pattern"))
+            assertEquals("projectPath:${fileSet.pattern}", compile("projectPath:$pattern").text, pattern)
+        }
+        for (pattern in listOf("", "[", "libs/[", "libs//*)", "libs//*||")) {
+            val fileError = assertThrows(ParsingException::class.java) { PackageSetFactory.getInstance().compile("file:$pattern") }
+            val projectPathError = assertThrows(ParsingException::class.java) { PackageSetFactory.getInstance().compile("projectPath:$pattern") }
+            val prefixShift = "projectPath:".length - "file:".length
+            assertEquals(shiftPosition(fileError.message!!, prefixShift), projectPathError.message, pattern)
+        }
+    }
+
+    @Test
+    fun `text and copy round-trip`() {
+        val text = "projectPath:/libs/source-2.1~backup#1//*"
+        val set = compile(text)
+        assertInstanceOf(ProjectPathPatternPackageSet::class.java, set)
+        assertEquals(text, set.text)
+        assertEquals(text, set.createCopy().text)
+        assertNotSame(set, set.createCopy())
+        assertEquals(text, compile(set.text).text)
+        assertEquals(0, set.nodePriority)
+    }
+
+    @Test
+    fun `files outside every base directory never match`(): Unit = timeoutRunBlocking {
+        val outside = LightVirtualFile("outside.cpp")
+        assertFalse(contains(compile("projectPath:**"), outside))
+        assertFalse(contains(compile("projectPath:*.cpp"), outside))
+    }
+
+    @Test
+    fun `excluded files match like the native implementation`(): Unit = timeoutRunBlocking {
+        registerProjectRoot(projectModel.project, projectModel.projectRootDir)
+        val contentRoot = projectModel.baseProjectDir.newVirtualDirectory("language-server/analyzer")
+        val module = projectModel.createModule("language-server.analyzer")
+        PsiTestUtil.addContentRoot(module, contentRoot)
+        val excluded = projectModel.baseProjectDir.newVirtualFile("language-server/analyzer/generated/Out.kt")
+        PsiTestUtil.addExcludedRoot(module, excluded.parent)
+
+        assertTrue(contains(compile("projectPath:language-server//*"), excluded))
+        assertFalse(contains(compile("file:generated//*"), excluded))
+    }
+
+    @Test
+    fun `attached content root becomes a base directory and detaching it removes the match`(): Unit = timeoutRunBlocking {
+        val file = tempDir.newVirtualFile("attached-root/src/attached.cpp")
+        val root = file.parent.parent
+        assertFalse(contains(compile("projectPath:src//*"), file))
+
+        val module = projectModel.createModule("attached")
+        PsiTestUtil.addContentRoot(module, root)
+        waitForBaseDirectory(file, root)
+        assertTrue(contains(compile("projectPath:src//*"), file))
+        assertFalse(contains(compile("projectPath:attached-root/src//*"), file))
+
+        PsiTestUtil.removeContentEntry(module, root)
+        waitForBaseDirectory(file, null)
+        assertFalse(contains(compile("projectPath:src//*"), file))
+    }
+
+    @Test
+    fun `search scope keeps the project content filter`(): Unit = timeoutRunBlocking {
+        registerProjectRoot(projectModel.project, projectModel.projectRootDir)
+        val contentRoot = projectModel.baseProjectDir.newVirtualDirectory("language-server/analyzer")
+        val module = projectModel.createModule("language-server.analyzer")
+        PsiTestUtil.addContentRoot(module, contentRoot)
+        val inContent = projectModel.baseProjectDir.newVirtualFile("language-server/analyzer/src/Foo.kt")
+        val excluded = projectModel.baseProjectDir.newVirtualFile("language-server/analyzer/generated/Out.kt")
+        PsiTestUtil.addExcludedRoot(module, excluded.parent)
+        val pattern = compile("projectPath:language-server//*")
+        assertTrue(contains(pattern, excluded))
+
+        // The pattern matches the excluded file, but a search scope built from it still leaves excluded files out
+        val searchScope = GlobalSearchScopesCore.filterScope(projectModel.project, NamedScope("Net", pattern))
+        assertTrue(readAction { searchScope.contains(inContent) })
+        assertFalse(readAction { searchScope.contains(excluded) })
+    }
+
+    @Test
+    fun `named scope references and stored scopes resolve`(): Unit = timeoutRunBlocking {
+        val file = createNestedModuleFile()
+        val test = projectModel.baseProjectDir.newVirtualFile("language-server/analyzer/src/FooTest.kt")
+        val manager = NamedScopeManager.getInstance(projectModel.project)
+        manager.setScopes(arrayOf(NamedScope("Net", compile("projectPath:language-server//*"))))
+
+        val expression = compile("\$Net&&!projectPath:*Test.kt")
+        assertTrue(readAction { expression.contains(file, projectModel.project, manager) })
+        assertFalse(readAction { expression.contains(test, projectModel.project, manager) })
+
+        val state = manager.state
+        manager.setScopes(arrayOf())
+        manager.loadState(state)
+        val restoredScope = manager.getScope("Net")
+        assertNotNull(restoredScope)
+        val restored = restoredScope!!.value
+        assertEquals("projectPath:language-server//*", restored?.text)
+        assertTrue(readAction { (restored as PackageSetBase).contains(file, projectModel.project, manager) })
+    }
+
+    private suspend fun waitForBaseDirectory(file: VirtualFile, expected: VirtualFile?) {
+        val directories = BaseProjectDirectories.getInstance(projectModel.project)
+        withTimeout(10.seconds) {
+            while (directories.getBaseDirectoryFor(file) != expected) delay(20)
+        }
+    }
+
+    private fun shiftPosition(message: String, shift: Int): String =
+        Regex("(\\d+)(\\D*)$").replace(message) { "${it.groupValues[1].toInt() + shift}${it.groupValues[2]}" }
 
     private suspend fun createNestedModuleFile(): VirtualFile {
         registerProjectRoot(projectModel.project, projectModel.projectRootDir)

@@ -1,0 +1,16 @@
+projectPath Scopes Backport
+
+This product includes adaptations of IntelliJ Platform source code:
+Copyright 2000-2026 JetBrains s.r.o. and contributors.
+The adapted source files are governed by the Apache License, Version 2.0.
+
+ProjectPathPatternPackageSet.kt is a port of ProjectPathPatternPackageSet.kt.
+ProjectPathPackageSetParserExtension.kt adapts ProjectPathPackageSetParserExtension.kt and
+the token grammar of FilePackageSetParserExtension.java without inheriting its internal API.
+ProjectPathPatternPackageSetTest.kt ports cases from ProjectPathPatternPackageSetTest.kt.
+
+Upstream project: https://github.com/JetBrains/intellij-community
+Native matcher and parser commit: 8d10dbb2f609f3b2c076b29e8d6963ed3730c335
+File parser baseline: idea/262.10968.63
+
+This is an independent backport, not an official JetBrains plugin.

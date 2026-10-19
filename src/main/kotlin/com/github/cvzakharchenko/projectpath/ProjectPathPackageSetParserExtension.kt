@@ -1,5 +1,6 @@
+// Copyright 2000-2026 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 // Backport of com.intellij.psi.search.scope.packageSet.ProjectPathPackageSetParserExtension from IntelliJ Platform 2026.3
-// (JetBrains/intellij-community commit 8d10dbb2f609, IJPL-22590). Licensed under the Apache License 2.0.
+// (JetBrains/intellij-community commit 8d10dbb2f609, IJPL-22590). See NOTICE.
 package com.github.cvzakharchenko.projectpath
 
 import com.intellij.codeInsight.CodeInsightBundle

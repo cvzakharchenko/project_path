@@ -5,6 +5,10 @@
     <vendor>cvzakharchenko</vendor>
 
     <depends>com.intellij.modules.platform</depends>
+    <!-- The scope parser extension point and PackageSetFactory live in the lang module -->
+    <depends>com.intellij.modules.lang</depends>
+    <!-- Validated only in CLion, where 2026.2 breaks file: scopes for CMake projects -->
+    <depends>com.intellij.modules.clion</depends>
 
     <extensions defaultExtensionNs="com.intellij">
         <scopeParserExtension implementation="com.github.cvzakharchenko.projectpath.ProjectPathPackageSetParserExtension"/>

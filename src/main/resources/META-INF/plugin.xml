@@ -1,0 +1,12 @@
+<!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
+<idea-plugin>
+    <id>com.github.cvzakharchenko.projectpath</id>
+    <name>projectPath Scopes Backport</name>
+    <vendor>cvzakharchenko</vendor>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <scopeParserExtension implementation="com.github.cvzakharchenko.projectpath.ProjectPathPackageSetParserExtension"/>
+    </extensions>
+</idea-plugin>

@@ -114,8 +114,12 @@ tasks {
 
     test {
         useJUnitPlatform()
-        // CLion's Nova engine refuses to start its backend freeze monitor in tests and logs an error, which fails every test
-        systemProperty("patch.engine.backend.freeze.timeout", "0")
+    }
+
+    prepareTestSandbox {
+        // CLion's Nova engine fails tests that don't need it: it logs an error about its backend freeze monitor
+        // on startup, and its backend can throw while a test project is set up
+        disabledPlugins.add("org.jetbrains.plugins.clion.radler")
     }
 
     jar {

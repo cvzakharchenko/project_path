@@ -48,7 +48,7 @@ The base project directory is the outermost project or content root containing t
 - parsing: text round-trip, malformed input, and the same accepted and rejected input as `file:`
 - the native-parser guard
 
-CLion's Nova engine logs an error when its backend freeze monitor is enabled in tests, which fails every test, so the test task sets `patch.engine.backend.freeze.timeout=0`.
+The test sandbox disables CLion's Nova engine (`org.jetbrains.plugins.clion.radler`). With Nova loaded, it logs an error about its backend freeze monitor when tests start (`patch.engine.backend.freeze.timeout=0` silences that), and its backend can still throw while a test project is set up, which fails tests at random.
 
 `./gradlew verifyPlugin` runs the Plugin Verifier against the target IDE.
 

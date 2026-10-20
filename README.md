@@ -1,5 +1,7 @@
 # projectPath Scopes Backport
 
+[![Build](https://github.com/cvzakharchenko/project_path/actions/workflows/build.yml/badge.svg)](https://github.com/cvzakharchenko/project_path/actions/workflows/build.yml)
+
 Backports the `projectPath:` scope pattern of IntelliJ Platform 2026.3 to CLion 2026.2.
 
 <!-- Plugin description -->
@@ -52,7 +54,15 @@ The test sandbox disables CLion's Nova engine (`org.jetbrains.plugins.clion.radl
 
 `./gradlew verifyPlugin` runs the Plugin Verifier against the target IDE.
 
-## Build and install
+The [Build](https://github.com/cvzakharchenko/project_path/actions/workflows/build.yml) workflow runs `buildPlugin`, `check` and `verifyPlugin` against the downloaded CLion on pushes to `main` and on pull requests. On `main` it replaces the draft GitHub release with one for the current version: the plugin ZIP, with the version's changelog section as notes. Publishing the draft makes it the latest release.
+
+## Install
+
+Download `projectPath-<version>.zip` from the [latest release](https://github.com/cvzakharchenko/project_path/releases/latest), or build it (below). The `plugin-distribution` artifact of a Build run also has it, wrapped in another ZIP by GitHub.
+
+Install the plugin ZIP with <kbd>Settings</kbd> > <kbd>Plugins</kbd> > <kbd>⚙️</kbd> > <kbd>Install Plugin from Disk...</kbd>, then restart the IDE. Don't extract it.
+
+## Build
 
 Requires JDK 25 for the Gradle toolchain (the 2026.2 platform is compiled to Java 25).
 
@@ -60,9 +70,7 @@ Requires JDK 25 for the Gradle toolchain (the 2026.2 platform is compiled to Jav
 ./gradlew buildPlugin -PplatformLocalPath=C:/Users/<user>/AppData/Local/Programs/CLion
 ```
 
-Without `platformLocalPath`, the build downloads CLion 2026.2.3.1 (`platformVersion` in `gradle.properties`).
-
-Install `build/distributions/projectPath-<version>.zip` with <kbd>Settings</kbd> > <kbd>Plugins</kbd> > <kbd>⚙️</kbd> > <kbd>Install Plugin from Disk...</kbd>, then restart the IDE. Don't extract the ZIP.
+Without `platformLocalPath`, the build downloads CLion 2026.2.3.1 (`platformVersion` in `gradle.properties`). The plugin ZIP is `build/distributions/projectPath-<version>.zip`. The `.run` folder has IDE run configurations for `runIde`, `check` and `verifyPlugin`.
 
 If Java on Windows fails with `Unable to establish loopback connection` / `Invalid argument: connect` (seen when Gradle is started from some packaged apps), run Gradle from a regular terminal, or point Java's Unix domain sockets at a local folder for that shell only:
 
@@ -74,3 +82,6 @@ $env:JAVA_TOOL_OPTIONS = "-Djdk.net.unixdomain.tmpdir=$((Resolve-Path build/tmp)
 ## License
 
 The implementation is ported from JetBrains/intellij-community, licensed under the Apache License 2.0. See `NOTICE` and `LICENSE`; both are also bundled in the plugin JAR.
+
+---
+Plugin based on the [IntelliJ Platform Plugin Template](https://github.com/JetBrains/intellij-platform-plugin-template).

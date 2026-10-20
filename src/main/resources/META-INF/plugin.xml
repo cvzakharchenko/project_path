@@ -2,7 +2,7 @@
 <idea-plugin>
     <id>com.github.cvzakharchenko.projectpath</id>
     <name>projectPath Scopes Backport</name>
-    <vendor>cvzakharchenko</vendor>
+    <vendor url="https://github.com/cvzakharchenko/project_path">cvzakharchenko</vendor>
 
     <depends>com.intellij.modules.platform</depends>
     <!-- The scope parser extension point and PackageSetFactory live in the lang module -->
